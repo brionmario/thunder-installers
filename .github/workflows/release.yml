@@ -1,0 +1,84 @@
+name: 🚀 Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to release'
+        required: true
+        type: choice
+        options:
+          - thunderid
+        default: thunderid
+      bump_type:
+        description: 'Version bump type (major, minor, or patch)'
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 📦 Publish ${{ github.event.inputs.package }} (${{ github.event.inputs.bump_type }} bump)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 📝 Calculate Next Version
+        id: version
+        run: |
+          CURRENT=$(node -p "require('./${{ github.event.inputs.package }}/package.json').version")
+          if [[ $CURRENT =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+          else
+            echo "❌ Could not parse current version: $CURRENT"
+            exit 1
+          fi
+          case "${{ github.event.inputs.bump_type }}" in
+            major) VERSION="$((MAJOR + 1)).0.0" ;;
+            minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+            patch) VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+          esac
+          echo "✅ $CURRENT → $VERSION"
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: 🏷️ Bump Version and Install
+        run: |
+          cd "${{ github.event.inputs.package }}"
+          npm version "${{ steps.version.outputs.value }}" --no-git-tag-version
+          npm install
+
+      - name: 🚀 Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd "${{ github.event.inputs.package }}"
+          npm publish --access public
+
+      - name: 📝 Commit and Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add \
+            "${{ github.event.inputs.package }}/package.json" \
+            "${{ github.event.inputs.package }}/package-lock.json"
+          git commit -m "chore: release ${{ github.event.inputs.package }} v${{ steps.version.outputs.value }}"
+          git tag "${{ github.event.inputs.package }}-v${{ steps.version.outputs.value }}"
+          git push
+          git push --tags
