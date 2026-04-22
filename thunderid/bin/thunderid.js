@@ -24,14 +24,24 @@ const { intro, outro, text, spinner, note, cancel, isCancel } = require('@clack/
 const colors = require('picocolors');
 
 const { readState, writeState, STATE_DIR } = require('../lib/state');
-const { downloadAndExtract } = require('../lib/download');
+const { downloadAndExtract, getLatestThunderVersion } = require('../lib/download');
 const { runSetup } = require('../lib/setup');
-
-const VERSION = require('../package.json').version;
 
 async function main() {
   // eslint-disable-next-line no-console
   console.clear();
+
+  const s = spinner();
+  s.start('Fetching latest Thunder release...');
+  let VERSION;
+  try {
+    VERSION = await getLatestThunderVersion();
+    s.stop(`Latest Thunder release: v${VERSION}`);
+  } catch (err) {
+    s.stop('Could not fetch latest Thunder release.');
+    process.stderr.write(`\nError: ${err.message}\n`);
+    process.exit(1);
+  }
 
   const state = readState();
   const alreadyInstalled = state?.version === VERSION && fs.existsSync(state.installPath);

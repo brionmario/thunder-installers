@@ -80,4 +80,29 @@ async function downloadAndExtract(version, destDir, onStatus) {
   try { fs.unlinkSync(zipPath); } catch {}
 }
 
-module.exports = { downloadAndExtract, getPlatformAsset };
+function getLatestThunderVersion() {
+  return new Promise((resolve, reject) => {
+    const url = `https://api.github.com/repos/${THUNDER_REPO}/releases/latest`;
+    https.get(url, { headers: { 'User-Agent': 'thunderid-npx' } }, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        return getLatestThunderVersion().then(resolve).catch(reject);
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`HTTP ${res.statusCode} fetching latest Thunder release`));
+      }
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try {
+          const tag = JSON.parse(body).tag_name;
+          if (!tag) throw new Error('tag_name missing from GitHub release response');
+          resolve(tag.replace(/^v/, ''));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
+module.exports = { downloadAndExtract, getPlatformAsset, getLatestThunderVersion };
