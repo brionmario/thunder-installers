@@ -126,6 +126,15 @@ async function main() {
     process.stderr.write(`\nSetup failed: ${err.message}\n`);
     process.exit(1);
   }
+
+  note(`Setup complete for Thunder v${VERSION}\n${installPath}`, 'Starting Thunder');
+
+  try {
+    runStart(installPath, process.argv.slice(2));
+  } catch (err) {
+    process.stderr.write(`\nSetup succeeded but failed to start Thunder: ${err.message}\n`);
+    process.exit(1);
+  }
 }
 
 main();
