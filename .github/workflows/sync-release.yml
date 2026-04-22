@@ -1,0 +1,51 @@
+name: Sync Thunder Release
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Get latest Thunder version
+        id: thunder
+        run: |
+          VERSION=$(curl -sf https://api.github.com/repos/asgardeo/thunder/releases/latest \
+            | jq -r '.tag_name' | sed 's/^v//')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Get current thunderid version
+        id: current
+        run: |
+          echo "version=$(node -p "require('./thunderid/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish if new version available
+        if: steps.thunder.outputs.version != steps.current.outputs.version
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd thunderid
+          npm version "${{ steps.thunder.outputs.version }}" --no-git-tag-version
+          npm install
+          npm publish --access public
+
+      - name: Commit version bump
+        if: steps.thunder.outputs.version != steps.current.outputs.version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add thunderid/package.json thunderid/package-lock.json
+          git commit -m "chore: sync thunderid to v${{ steps.thunder.outputs.version }} [skip ci]"
+          git push
