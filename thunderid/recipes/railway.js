@@ -12,7 +12,6 @@ function getRailwayToml() {
     `  builder = "dockerfile"`,
     ``,
     `[deploy]`,
-    `  healthcheckPath = "/health/liveness"`,
     `  healthcheckTimeout = 300`,
   ].join('\n') + '\n';
 }
