@@ -118,6 +118,16 @@ if [ -f "$CONSOLE_CONFIG" ]; then
   fi
 fi
 
+# Patch the gate config.js for the same reason.
+GATE_CONFIG="apps/gate/config.js"
+if [ -f "$GATE_CONFIG" ]; then
+  sed -i "s|hostname: 'localhost'|hostname: '$PUBLIC_HOST'|g" "$GATE_CONFIG"
+  sed -i "s|port: 8090|port: $GATE_PORT|g" "$GATE_CONFIG"
+  if [ "$GATE_SCHEME" = "http" ]; then
+    sed -i "s|http_only: false|http_only: true|g" "$GATE_CONFIG"
+  fi
+fi
+
 # Use /data as sentinel location when a volume is mounted (e.g. Fly.io SQLite),
 # otherwise fall back to WORKDIR (resets on redeploy, which is correct since the DB does too).
 if [ -d "/data" ]; then
