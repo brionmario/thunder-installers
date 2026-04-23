@@ -107,6 +107,17 @@ sed -i "s|__GATE_SCHEME__|$GATE_SCHEME|g" "$DEPLOY_YAML"
 sed -i "s|__GATE_PORT__|$GATE_PORT|g" "$DEPLOY_YAML"
 sed -i "s|__SERVER_PORT__|$SERVER_PORT|g" "$DEPLOY_YAML"
 
+# Patch the console config.js so browser-side resource calls target the public URL
+# instead of the default localhost:8090.
+CONSOLE_CONFIG="apps/console/config.js"
+if [ -f "$CONSOLE_CONFIG" ]; then
+  sed -i "s|hostname: 'localhost'|hostname: '$PUBLIC_HOST'|g" "$CONSOLE_CONFIG"
+  sed -i "s|port: 8090|port: $GATE_PORT|g" "$CONSOLE_CONFIG"
+  if [ "$GATE_SCHEME" = "http" ]; then
+    sed -i "s|http_only: false|http_only: true|g" "$CONSOLE_CONFIG"
+  fi
+fi
+
 # Use /data as sentinel location when a volume is mounted (e.g. Fly.io SQLite),
 # otherwise fall back to WORKDIR (resets on redeploy, which is correct since the DB does too).
 if [ -d "/data" ]; then
