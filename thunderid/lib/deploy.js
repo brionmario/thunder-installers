@@ -120,9 +120,10 @@ if [ ! -f "$SENTINEL" ]; then
   THUNDER_SKIP_SECURITY=true bash setup.sh
   sed -i 's|hostname: "localhost"|hostname: "0.0.0.0"|g' "$DEPLOY_YAML"
   touch "$SENTINEL"
-  # setup.sh spawns Thunder (which starts the embedded OpenFGA server as a child process).
-  # When setup.sh kills Thunder, OpenFGA can be orphaned on port 9090.
-  # If the port is still occupied, the real start below can't start OpenFGA → readiness fails.
+  # In newer Thunder versions, setup.sh invokes start.sh internally and captures that PID.
+  # Killing start.sh leaves the Thunder binary and the embedded OpenFGA server as orphans.
+  # start.sh refuses to run if either port is occupied, which exits the container → 502.
+  lsof -ti tcp:8090 2>/dev/null | xargs kill -9 2>/dev/null || true
   lsof -ti tcp:9090 2>/dev/null | xargs kill -9 2>/dev/null || true
   sleep 1
 fi
