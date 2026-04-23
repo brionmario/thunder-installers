@@ -38,7 +38,7 @@ function getDeploymentYamlContent() {
 function getDockerfileContent(version) {
   const dirName = `thunder-${version}-linux-x64`;
   return `FROM alpine:3.19
-RUN apk add --no-cache sqlite openssl ca-certificates bash curl unzip
+RUN apk add --no-cache sqlite openssl ca-certificates bash curl unzip lsof
 
 RUN mkdir -p /app \\
     && curl -fsSL -o /tmp/thunder.zip \\
