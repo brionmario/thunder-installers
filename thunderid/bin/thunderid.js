@@ -43,10 +43,17 @@ function parseCliArgs(argv) {
 }
 
 async function main() {
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs[0] === 'deploy') {
+    const { deploy } = require('../lib/deploy');
+    await deploy(rawArgs.slice(1));
+    return;
+  }
+
   // eslint-disable-next-line no-console
   console.clear();
 
-  const { forceSetup, forwardedArgs } = parseCliArgs(process.argv.slice(2));
+  const { forceSetup, forwardedArgs } = parseCliArgs(rawArgs);
 
   const s = spinner();
   s.start('Fetching latest Thunder release...');
