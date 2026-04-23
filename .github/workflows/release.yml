@@ -1,6 +1,9 @@
 name: 🚀 Release
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       package:
@@ -25,7 +28,7 @@ permissions:
 
 jobs:
   release:
-    name: 📦 Publish ${{ github.event.inputs.package }} (${{ github.event.inputs.bump_type }} bump)
+    name: 📦 Publish ${{ github.event.inputs.package || 'thunderid' }} (${{ github.event.inputs.bump_type || 'patch' }} bump)
     runs-on: ubuntu-latest
 
     steps:
@@ -41,7 +44,7 @@ jobs:
       - name: 📝 Calculate Next Version
         id: version
         run: |
-          CURRENT=$(node -p "require('./${{ github.event.inputs.package }}/package.json').version")
+          CURRENT=$(node -p "require('./${{ github.event.inputs.package || 'thunderid' }}/package.json').version")
           if [[ $CURRENT =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
             MAJOR="${BASH_REMATCH[1]}"
             MINOR="${BASH_REMATCH[2]}"
@@ -50,7 +53,7 @@ jobs:
             echo "❌ Could not parse current version: $CURRENT"
             exit 1
           fi
-          case "${{ github.event.inputs.bump_type }}" in
+          case "${{ github.event.inputs.bump_type || 'patch' }}" in
             major) VERSION="$((MAJOR + 1)).0.0" ;;
             minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
             patch) VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
@@ -60,7 +63,7 @@ jobs:
 
       - name: 🏷️ Bump Version and Install
         run: |
-          cd "${{ github.event.inputs.package }}"
+          cd "${{ github.event.inputs.package || 'thunderid' }}"
           npm version "${{ steps.version.outputs.value }}" --no-git-tag-version
           npm install
 
@@ -68,7 +71,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd "${{ github.event.inputs.package }}"
+          cd "${{ github.event.inputs.package || 'thunderid' }}"
           npm publish --access public
 
       - name: 📝 Commit and Tag
@@ -76,9 +79,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add \
-            "${{ github.event.inputs.package }}/package.json" \
-            "${{ github.event.inputs.package }}/package-lock.json"
-          git commit -m "chore: release ${{ github.event.inputs.package }} v${{ steps.version.outputs.value }}"
-          git tag "${{ github.event.inputs.package }}-v${{ steps.version.outputs.value }}"
+            "${{ github.event.inputs.package || 'thunderid' }}/package.json" \
+            "${{ github.event.inputs.package || 'thunderid' }}/package-lock.json"
+          git commit -m "chore: release ${{ github.event.inputs.package || 'thunderid' }} v${{ steps.version.outputs.value }}"
+          git tag "${{ github.event.inputs.package || 'thunderid' }}-v${{ steps.version.outputs.value }}"
           git push
           git push --tags

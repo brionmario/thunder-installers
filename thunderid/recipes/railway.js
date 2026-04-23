@@ -13,7 +13,7 @@ function getRailwayToml() {
     ``,
     `[deploy]`,
     `  healthcheckPath = "/health/liveness"`,
-    `  healthcheckTimeout = 120`,
+    `  healthcheckTimeout = 300`,
   ].join('\n') + '\n';
 }
 

@@ -112,7 +112,13 @@ else
 fi
 
 if [ ! -f "$SENTINEL" ]; then
+  # setup.sh reads hostname from deployment.yaml to build its BASE_URL for health polling.
+  # "0.0.0.0" is the right binding address for the server but is not a valid client destination —
+  # curl to http://0.0.0.0:8090 fails or times out on every retry, stalling setup for minutes.
+  # Swap to localhost just for the setup phase, then restore the binding address afterwards.
+  sed -i 's|hostname: "0.0.0.0"|hostname: "localhost"|g' "$DEPLOY_YAML"
   THUNDER_SKIP_SECURITY=true bash setup.sh
+  sed -i 's|hostname: "localhost"|hostname: "0.0.0.0"|g' "$DEPLOY_YAML"
   touch "$SENTINEL"
   # setup.sh spawns Thunder (which starts the embedded OpenFGA server as a child process).
   # When setup.sh kills Thunder, OpenFGA can be orphaned on port 9090.
