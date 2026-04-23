@@ -9,6 +9,32 @@ const { getLatestThunderVersion } = require('./download');
 const { readState } = require('./state');
 const { loadRecipes } = require('../recipes/index');
 
+// Cloud-ready deployment.yaml.
+// Placeholders (__PUBLIC_URL__ etc.) are substituted at container startup by entrypoint.sh.
+function getDeploymentYamlContent() {
+  return [
+    'server:',
+    '  hostname: "0.0.0.0"',
+    '  port: 8090',
+    '  http_only: true',
+    '  public_url: "__PUBLIC_URL__"',
+    '',
+    'gate_client:',
+    '  hostname: "__PUBLIC_HOST__"',
+    '  port: __GATE_PORT__',
+    '  scheme: "__GATE_SCHEME__"',
+    '  path: "/gate"',
+    '',
+    'cors:',
+    '  allowed_origins:',
+    '    - "__PUBLIC_URL__"',
+    '',
+    'passkey:',
+    '  allowed_origins:',
+    '    - "__PUBLIC_URL__"',
+  ].join('\n') + '\n';
+}
+
 function getDockerfileContent(version) {
   const dirName = `thunder-${version}-linux-x64`;
   return `FROM alpine:3.19
@@ -22,8 +48,9 @@ RUN mkdir -p /app \\
 
 WORKDIR /app/${dirName}
 
-RUN find . -name "deployment.yaml" -exec sed -i 's/127\\.0\\.0\\.1/0.0.0.0/g' {} \\; 2>/dev/null || true \\
-    && find . -name "deployment.yaml" -exec sed -i 's/localhost/0.0.0.0/g' {} \\; 2>/dev/null || true
+# Replace the bundled deployment.yaml with a cloud-ready template.
+# Placeholders are substituted at runtime by entrypoint.sh using provider env vars.
+COPY .thunderdeploy/deployment.yaml repository/conf/deployment.yaml
 
 RUN addgroup -S thunder && adduser -S thunder -G thunder \\
     && chown -R thunder:thunder .
@@ -40,6 +67,41 @@ ENTRYPOINT ["/entrypoint.sh"]
 function getEntrypointContent() {
   return `#!/bin/bash
 set -e
+
+# Resolve the public URL from provider-injected environment variables.
+# Each platform sets a different variable; we normalise them into PUBLIC_URL.
+# Users can also set PUBLIC_URL explicitly to override auto-detection.
+if [ -z "$PUBLIC_URL" ]; then
+  if [ -n "$RAILWAY_PUBLIC_DOMAIN" ]; then
+    PUBLIC_URL="https://$RAILWAY_PUBLIC_DOMAIN"
+  elif [ -n "$RENDER_EXTERNAL_URL" ]; then
+    PUBLIC_URL="$RENDER_EXTERNAL_URL"
+  elif [ -n "$FLY_APP_NAME" ]; then
+    PUBLIC_URL="https://$FLY_APP_NAME.fly.dev"
+  fi
+fi
+
+# Fill in deployment.yaml placeholders with the resolved public URL.
+DEPLOY_YAML="repository/conf/deployment.yaml"
+if [ -n "$PUBLIC_URL" ]; then
+  PUBLIC_HOST=$(echo "$PUBLIC_URL" | sed 's|https://||; s|http://||; s|[:/].*||')
+  if echo "$PUBLIC_URL" | grep -q "^https://"; then
+    GATE_SCHEME="https"
+    GATE_PORT="443"
+  else
+    GATE_SCHEME="http"
+    GATE_PORT="8090"
+  fi
+else
+  PUBLIC_URL="http://localhost:8090"
+  PUBLIC_HOST="localhost"
+  GATE_SCHEME="http"
+  GATE_PORT="8090"
+fi
+sed -i "s|__PUBLIC_URL__|$PUBLIC_URL|g" "$DEPLOY_YAML"
+sed -i "s|__PUBLIC_HOST__|$PUBLIC_HOST|g" "$DEPLOY_YAML"
+sed -i "s|__GATE_SCHEME__|$GATE_SCHEME|g" "$DEPLOY_YAML"
+sed -i "s|__GATE_PORT__|$GATE_PORT|g" "$DEPLOY_YAML"
 
 # Use /data as sentinel location when a volume is mounted (e.g. Fly.io SQLite),
 # otherwise fall back to WORKDIR (resets on redeploy, which is correct since the DB does too).
@@ -208,6 +270,7 @@ async function deploy(_args) {
 
   const deployDir = path.join(process.cwd(), '.thunderdeploy');
   fs.mkdirSync(deployDir, { recursive: true });
+  fs.writeFileSync(path.join(deployDir, 'deployment.yaml'), getDeploymentYamlContent(), 'utf8');
   fs.writeFileSync(path.join(deployDir, 'entrypoint.sh'), getEntrypointContent(), 'utf8');
 
   const dockerfilePath = path.join(process.cwd(), 'Dockerfile');
