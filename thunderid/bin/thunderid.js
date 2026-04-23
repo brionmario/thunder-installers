@@ -115,7 +115,7 @@ async function main() {
       note(`Using ThunderID v${VERSION}\n${installPath}`, 'Already installed');
     }
   } else {
-    const defaultPath = path.join(STATE_DIR, VERSION);
+    const defaultPath = path.join(process.cwd(), VERSION);
 
     const rawInstallPath = await text({
       message: 'Install directory',

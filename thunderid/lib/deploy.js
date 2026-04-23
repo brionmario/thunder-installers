@@ -25,12 +25,35 @@ RUN find . -name "deployment.yaml" -exec sed -i 's/127\\.0\\.0\\.1/0.0.0.0/g' {}
     && find . -name "deployment.yaml" -exec sed -i 's/localhost/0.0.0.0/g' {} \\; 2>/dev/null || true
 
 RUN addgroup -S thunder && adduser -S thunder -G thunder \\
-    && THUNDER_SKIP_SECURITY=true bash setup.sh \\
     && chown -R thunder:thunder .
+
+COPY .thunderdeploy/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 USER thunder
 EXPOSE 8090
-CMD ["bash", "start.sh"]
+ENTRYPOINT ["/entrypoint.sh"]
+`;
+}
+
+function getEntrypointContent() {
+  return `#!/bin/bash
+set -e
+
+# Use /data as sentinel location when a volume is mounted (e.g. Fly.io SQLite),
+# otherwise fall back to WORKDIR (resets on redeploy, which is correct since the DB does too).
+if [ -d "/data" ]; then
+  SENTINEL="/data/.thunder-setup-complete"
+else
+  SENTINEL=".setup-complete"
+fi
+
+if [ ! -f "$SENTINEL" ]; then
+  THUNDER_SKIP_SECURITY=true bash setup.sh
+  touch "$SENTINEL"
+fi
+
+exec bash start.sh
 `;
 }
 
@@ -175,6 +198,10 @@ async function deploy(_args) {
   }
 
   const appName = appNameInput || defaultName;
+
+  const deployDir = path.join(process.cwd(), '.thunderdeploy');
+  fs.mkdirSync(deployDir, { recursive: true });
+  fs.writeFileSync(path.join(deployDir, 'entrypoint.sh'), getEntrypointContent(), 'utf8');
 
   const dockerfilePath = path.join(process.cwd(), 'Dockerfile');
   if (fs.existsSync(dockerfilePath)) {
