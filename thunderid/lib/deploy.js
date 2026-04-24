@@ -107,27 +107,6 @@ sed -i "s|__GATE_SCHEME__|$GATE_SCHEME|g" "$DEPLOY_YAML"
 sed -i "s|__GATE_PORT__|$GATE_PORT|g" "$DEPLOY_YAML"
 sed -i "s|__SERVER_PORT__|$SERVER_PORT|g" "$DEPLOY_YAML"
 
-# Patch the console config.js so browser-side resource calls target the public URL
-# instead of the default localhost:8090.
-CONSOLE_CONFIG="apps/console/config.js"
-if [ -f "$CONSOLE_CONFIG" ]; then
-  sed -i "s|hostname: 'localhost'|hostname: '$PUBLIC_HOST'|g" "$CONSOLE_CONFIG"
-  sed -i "s|port: 8090|port: $GATE_PORT|g" "$CONSOLE_CONFIG"
-  if [ "$GATE_SCHEME" = "http" ]; then
-    sed -i "s|http_only: false|http_only: true|g" "$CONSOLE_CONFIG"
-  fi
-fi
-
-# Patch the gate config.js for the same reason.
-GATE_CONFIG="apps/gate/config.js"
-if [ -f "$GATE_CONFIG" ]; then
-  sed -i "s|hostname: 'localhost'|hostname: '$PUBLIC_HOST'|g" "$GATE_CONFIG"
-  sed -i "s|port: 8090|port: $GATE_PORT|g" "$GATE_CONFIG"
-  if [ "$GATE_SCHEME" = "http" ]; then
-    sed -i "s|http_only: false|http_only: true|g" "$GATE_CONFIG"
-  fi
-fi
-
 # Use /data as sentinel location when a volume is mounted (e.g. Fly.io SQLite),
 # otherwise fall back to WORKDIR (resets on redeploy, which is correct since the DB does too).
 if [ -d "/data" ]; then
@@ -151,6 +130,26 @@ if [ ! -f "$SENTINEL" ]; then
   lsof -ti tcp:"$SERVER_PORT" 2>/dev/null | xargs kill -9 2>/dev/null || true
   lsof -ti tcp:9090 2>/dev/null | xargs kill -9 2>/dev/null || true
   sleep 1
+fi
+
+# Patch config.js files AFTER setup so that setup.sh/start.sh cannot overwrite the changes.
+# The port pattern matches any number to handle Thunder versions that ship different defaults.
+CONSOLE_CONFIG="apps/console/config.js"
+if [ -f "$CONSOLE_CONFIG" ]; then
+  sed -i "s|hostname: 'localhost'|hostname: '$PUBLIC_HOST'|g" "$CONSOLE_CONFIG"
+  sed -i "s|port: [0-9]*|port: $GATE_PORT|g" "$CONSOLE_CONFIG"
+  if [ "$GATE_SCHEME" = "http" ]; then
+    sed -i "s|http_only: false|http_only: true|g" "$CONSOLE_CONFIG"
+  fi
+fi
+
+GATE_CONFIG="apps/gate/config.js"
+if [ -f "$GATE_CONFIG" ]; then
+  sed -i "s|hostname: 'localhost'|hostname: '$PUBLIC_HOST'|g" "$GATE_CONFIG"
+  sed -i "s|port: [0-9]*|port: $GATE_PORT|g" "$GATE_CONFIG"
+  if [ "$GATE_SCHEME" = "http" ]; then
+    sed -i "s|http_only: false|http_only: true|g" "$GATE_CONFIG"
+  fi
 fi
 
 # Forward the resolved port to start.sh so Thunder binds on Railway's expected port.
