@@ -293,19 +293,22 @@ async function deploy(_args) {
     }
   }
 
-  const defaultName = `thunder-${Math.random().toString(36).slice(2, 7)}`;
-  const appNameInput = await text({
-    message: 'App name:',
-    placeholder: defaultName,
-    defaultValue: defaultName,
-  });
+  let appName;
+  if (recipe.needsAppName !== false) {
+    const defaultName = `thunder-${Math.random().toString(36).slice(2, 7)}`;
+    const appNameInput = await text({
+      message: 'App name:',
+      placeholder: defaultName,
+      defaultValue: defaultName,
+    });
 
-  if (isCancel(appNameInput)) {
-    cancel('Deploy cancelled.');
-    process.exit(0);
+    if (isCancel(appNameInput)) {
+      cancel('Deploy cancelled.');
+      process.exit(0);
+    }
+
+    appName = appNameInput || defaultName;
   }
-
-  const appName = appNameInput || defaultName;
 
   const deployDir = path.join(process.cwd(), '.thunderdeploy');
   fs.mkdirSync(deployDir, { recursive: true });
@@ -325,7 +328,7 @@ async function deploy(_args) {
     process.exit(1);
   }
 
-  outro(colors.green(`ThunderID v${version} deployed as ${colors.bold(appName)}`));
+  outro(colors.green(`ThunderID v${version} deployed${appName ? ` as ${colors.bold(appName)}` : ''}`));
 }
 
 module.exports = { deploy };

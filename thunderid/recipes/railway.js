@@ -3,7 +3,7 @@
 const { execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { log, select, isCancel, cancel } = require('@clack/prompts');
+const { log, select, text, isCancel, cancel } = require('@clack/prompts');
 const colors = require('picocolors');
 
 function getRailwayToml() {
@@ -22,6 +22,7 @@ const railway = {
   description: 'Simple deploys, built-in managed Postgres option',
   cliName: 'railway',
   installCmd: 'npm install -g @railway/cli',
+  needsAppName: false,
 
   async preflight() {
     const auth = spawnSync('railway', ['whoami'], { stdio: 'pipe' });
@@ -31,7 +32,8 @@ const railway = {
     }
   },
 
-  async deploy({ appName, dbType, dbUrl }) {
+  async deploy({ appName: _appName, dbType, dbUrl }) {
+    let appName = _appName;
     const cwd = process.cwd();
 
     let existingProjects = [];
@@ -46,7 +48,7 @@ const railway = {
         message: 'Railway project:',
         options: [
           ...existingProjects.map((p) => ({ value: p.id, label: p.name })),
-          { value: '__new__', label: 'Create new project', hint: appName },
+          { value: '__new__', label: 'Create new project' },
         ],
       });
       if (isCancel(choice)) {
@@ -63,6 +65,17 @@ const railway = {
       log.info('Linking to existing Railway project...');
       execSync(`railway link -p "${linkToProject}"`, { stdio: 'inherit' });
     } else {
+      const defaultName = `thunder-${Math.random().toString(36).slice(2, 7)}`;
+      const appNameInput = await text({
+        message: 'App name:',
+        placeholder: defaultName,
+        defaultValue: defaultName,
+      });
+      if (isCancel(appNameInput)) {
+        cancel('Deploy cancelled.');
+        process.exit(0);
+      }
+      appName = appNameInput || defaultName;
       log.info(`Initializing Railway project: ${colors.cyan(appName)}`);
       execSync(`railway init --name "${appName}"`, { stdio: 'inherit' });
     }
