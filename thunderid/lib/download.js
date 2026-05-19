@@ -17,7 +17,7 @@ function getPlatformAsset(version) {
   if (!platform || !arch) {
     throw new Error(`Unsupported platform: ${process.platform}/${process.arch}`);
   }
-  return `thunder-${version}-${platform}-${arch}.zip`;
+  return `thunderid-${version}-${platform}-${arch}.zip`;
 }
 
 function fetchWithRedirects(url) {
