@@ -6,7 +6,7 @@ const https = require('https');
 const os = require('os');
 const path = require('path');
 
-const THUNDER_REPO = 'asgardeo/thunder';
+const THUNDER_REPO = 'thunder-id/thunderid';
 
 const PLATFORM_MAP = { darwin: 'macos', linux: 'linux', win32: 'win' };
 const ARCH_MAP = { x64: 'x64', arm64: 'arm64' };
