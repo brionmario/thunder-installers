@@ -3,6 +3,7 @@ import * as path from 'path';
 import { spawnSync, execSync } from 'child_process';
 import { intro, outro, select, text, confirm, spinner, note, isCancel, cancel } from '@clack/prompts';
 import colors from 'picocolors';
+import { PRODUCT_NAME } from './constants';
 import { getLatestThunderVersion } from './download';
 import { readState } from './state';
 import { loadRecipes } from '../recipes/index';
@@ -216,7 +217,7 @@ export async function deploy(_args: string[]): Promise<void> {
   // eslint-disable-next-line no-console
   console.clear();
 
-  intro(colors.bold('⚡ ThunderID') + colors.dim(' — Deploy'));
+  intro(colors.bold(`⚡ ${PRODUCT_NAME}`) + colors.dim(' — Deploy'));
 
   let version: string;
   const localState = readState();
@@ -344,5 +345,5 @@ export async function deploy(_args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  outro(colors.green(`ThunderID v${version!} deployed${appName ? ` as ${colors.bold(appName)}` : ''}`));
+  outro(colors.green(`${PRODUCT_NAME} v${version!} deployed${appName ? ` as ${colors.bold(appName)}` : ''}`));
 }

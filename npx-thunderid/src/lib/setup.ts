@@ -1,14 +1,17 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { note } from '@clack/prompts';
+
+const isWindows = process.platform === 'win32';
 
 export function findSetupScript(installPath: string): string | null {
-  const rootScript = path.join(installPath, 'setup.sh');
+  const scriptName = isWindows ? 'setup.ps1' : 'setup.sh';
+
+  const rootScript = path.join(installPath, scriptName);
   if (fs.existsSync(rootScript)) return rootScript;
 
   for (const entry of fs.readdirSync(installPath)) {
-    const nested = path.join(installPath, entry, 'setup.sh');
+    const nested = path.join(installPath, entry, scriptName);
     if (fs.existsSync(nested)) return nested;
   }
 
@@ -22,40 +25,42 @@ export function findThunderRoot(installPath: string): string | null {
 }
 
 export function runSetup(installPath: string, args: string[] = []): void {
-  if (process.platform === 'win32') {
-    note(
-      'setup.sh requires a Unix shell.\n' +
-        'Open WSL or Git Bash, navigate to:\n' +
-        `  ${installPath}\n` +
-        'and run:  bash setup.sh',
-      'Windows users',
-    );
-    process.exit(0);
-  }
-
   const thunderRoot = findThunderRoot(installPath);
   if (!thunderRoot) {
-    throw new Error(`setup.sh not found in ${installPath}`);
+    throw new Error(`setup script not found in ${installPath}`);
   }
 
-  execFileSync('bash', ['setup.sh', ...args], { cwd: thunderRoot, stdio: 'inherit' });
+  if (isWindows) {
+    execFileSync('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', 'setup.ps1', ...args], {
+      cwd: thunderRoot,
+      stdio: 'inherit',
+    });
+  } else {
+    execFileSync('bash', ['setup.sh', ...args], { cwd: thunderRoot, stdio: 'inherit' });
+  }
 }
 
 export function runStart(installPath: string, args: string[] = []): void {
-  if (process.platform === 'win32') {
-    note(
-      'Thunder requires a Unix shell to start.\n' +
-        'Open WSL or Git Bash, navigate to:\n' +
-        `  ${installPath}\n` +
-        'and run the Thunder binary directly.',
-      'Windows users',
-    );
-    process.exit(0);
-  }
-
   const thunderRoot = findThunderRoot(installPath);
   if (!thunderRoot) {
     throw new Error(`Thunder installation not found in ${installPath}`);
+  }
+
+  if (isWindows) {
+    const startPs1 = path.join(thunderRoot, 'start.ps1');
+    if (fs.existsSync(startPs1)) {
+      execFileSync('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', 'start.ps1', ...args], {
+        cwd: thunderRoot,
+        stdio: 'inherit',
+      });
+      return;
+    }
+    const binary = path.join(thunderRoot, 'thunderid.exe');
+    if (fs.existsSync(binary)) {
+      execFileSync(binary, args, { cwd: thunderRoot, stdio: 'inherit' });
+      return;
+    }
+    throw new Error(`No start.ps1 or thunderid.exe found in ${thunderRoot}`);
   }
 
   const startScript = path.join(thunderRoot, 'start.sh');
