@@ -41,10 +41,26 @@ jobs:
           node-version: 'lts/*'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: ⚙️ Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: 🗂️ Resolve Package Directory
+        id: pkg
+        run: |
+          PACKAGE="${{ github.event.inputs.package || 'thunderid' }}"
+          case "$PACKAGE" in
+            thunderid) DIR="npx-thunderid" ;;
+            *) DIR="$PACKAGE" ;;
+          esac
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+          echo "name=$PACKAGE" >> "$GITHUB_OUTPUT"
+
       - name: 📝 Calculate Next Version
         id: version
         run: |
-          CURRENT=$(node -p "require('./${{ github.event.inputs.package || 'thunderid' }}/package.json').version")
+          CURRENT=$(node -p "require('./${{ steps.pkg.outputs.dir }}/package.json').version")
           if [[ $CURRENT =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
             MAJOR="${BASH_REMATCH[1]}"
             MINOR="${BASH_REMATCH[2]}"
@@ -63,25 +79,30 @@ jobs:
 
       - name: 🏷️ Bump Version and Install
         run: |
-          cd "${{ github.event.inputs.package || 'thunderid' }}"
+          cd "${{ steps.pkg.outputs.dir }}"
           npm version "${{ steps.version.outputs.value }}" --no-git-tag-version
-          npm install
+          pnpm install --frozen-lockfile
+
+      - name: 🔨 Build
+        run: |
+          cd "${{ steps.pkg.outputs.dir }}"
+          pnpm build
 
       - name: 🚀 Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd "${{ github.event.inputs.package || 'thunderid' }}"
-          npm publish --access public
+          cd "${{ steps.pkg.outputs.dir }}"
+          pnpm publish --access public --no-git-checks
 
       - name: 📝 Commit and Tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add \
-            "${{ github.event.inputs.package || 'thunderid' }}/package.json" \
-            "${{ github.event.inputs.package || 'thunderid' }}/package-lock.json"
-          git commit -m "chore: release ${{ github.event.inputs.package || 'thunderid' }} v${{ steps.version.outputs.value }}"
-          git tag "${{ github.event.inputs.package || 'thunderid' }}-v${{ steps.version.outputs.value }}"
+            "${{ steps.pkg.outputs.dir }}/package.json" \
+            "${{ steps.pkg.outputs.dir }}/pnpm-lock.yaml"
+          git commit -m "chore: release ${{ steps.pkg.outputs.name }} v${{ steps.version.outputs.value }}"
+          git tag "${{ steps.pkg.outputs.name }}-v${{ steps.version.outputs.value }}"
           git push
           git push --tags

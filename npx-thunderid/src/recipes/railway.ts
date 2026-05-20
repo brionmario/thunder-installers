@@ -1,22 +1,20 @@
-'use strict';
+import { execSync, spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+import { log, select, text, isCancel, cancel } from '@clack/prompts';
+import colors from 'picocolors';
+import type { Recipe, DeployOptions } from '../lib/types';
 
-const { execSync, spawnSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const { log, select, text, isCancel, cancel } = require('@clack/prompts');
-const colors = require('picocolors');
-
-function getRailwayToml() {
-  return [
-    `[build]`,
-    `  builder = "dockerfile"`,
-    ``,
-    `[deploy]`,
-    `  healthcheckTimeout = 300`,
-  ].join('\n') + '\n';
+interface RailwayProject {
+  id: string;
+  name: string;
 }
 
-const railway = {
+function getRailwayToml(): string {
+  return [`[build]`, `  builder = "dockerfile"`, ``, `[deploy]`, `  healthcheckTimeout = 300`].join('\n') + '\n';
+}
+
+const railway: Recipe = {
   id: 'railway',
   displayName: 'Railway',
   description: 'Simple deploys, built-in managed Postgres option',
@@ -32,17 +30,17 @@ const railway = {
     }
   },
 
-  async deploy({ appName: _appName, dbType, dbUrl }) {
-    let appName = _appName;
+  async deploy({ dbType, dbUrl }: DeployOptions) {
+    let appName: string | undefined;
     const cwd = process.cwd();
 
-    let existingProjects = [];
+    let existingProjects: RailwayProject[] = [];
     try {
       const result = spawnSync('railway', ['list', '--json'], { stdio: 'pipe', encoding: 'utf8' });
-      if (result.status === 0) existingProjects = JSON.parse(result.stdout);
-    } catch (_) {}
+      if (result.status === 0) existingProjects = JSON.parse(result.stdout) as RailwayProject[];
+    } catch { /* ignore */ }
 
-    let linkToProject = null;
+    let linkToProject: string | null = null;
     if (existingProjects.length > 0) {
       const choice = await select({
         message: 'Railway project:',
@@ -55,7 +53,7 @@ const railway = {
         cancel('Deploy cancelled.');
         process.exit(0);
       }
-      if (choice !== '__new__') linkToProject = choice;
+      if (choice !== '__new__') linkToProject = choice as string;
     }
 
     fs.writeFileSync(path.join(cwd, 'railway.toml'), getRailwayToml(), 'utf8');
@@ -75,7 +73,7 @@ const railway = {
         cancel('Deploy cancelled.');
         process.exit(0);
       }
-      appName = appNameInput || defaultName;
+      appName = (appNameInput as string) || defaultName;
       log.info(`Initializing Railway project: ${colors.cyan(appName)}`);
       execSync(`railway init --name "${appName}"`, { stdio: 'inherit' });
     }
@@ -94,10 +92,10 @@ const railway = {
       log.success(`${colors.bold(colors.green('Deployed!'))} ${colors.cyan(`https://${domain}`)}`);
     } else {
       log.success(
-        `${colors.bold(colors.green('Deployed!'))} Run ${colors.cyan('railway open')} to view your app.`
+        `${colors.bold(colors.green('Deployed!'))} Run ${colors.cyan('railway open')} to view your app.`,
       );
     }
   },
 };
 
-module.exports = railway;
+export default railway;

@@ -1,17 +1,14 @@
-'use strict';
+import * as fs from 'fs';
+import * as path from 'path';
+import { spawnSync, execSync } from 'child_process';
+import { intro, outro, select, text, confirm, spinner, note, isCancel, cancel } from '@clack/prompts';
+import colors from 'picocolors';
+import { getLatestThunderVersion } from './download';
+import { readState } from './state';
+import { loadRecipes } from '../recipes/index';
+import type { Recipe, DbType } from './types';
 
-const fs = require('fs');
-const path = require('path');
-const { spawnSync, execSync } = require('child_process');
-const { intro, outro, select, text, confirm, spinner, note, isCancel, cancel } = require('@clack/prompts');
-const colors = require('picocolors');
-const { getLatestThunderVersion } = require('./download');
-const { readState } = require('./state');
-const { loadRecipes } = require('../recipes/index');
-
-// Cloud-ready deployment.yaml.
-// Placeholders (__PUBLIC_URL__ etc.) are substituted at container startup by entrypoint.sh.
-function getDeploymentYamlContent() {
+function getDeploymentYamlContent(): string {
   return [
     'server:',
     '  hostname: "0.0.0.0"',
@@ -35,7 +32,7 @@ function getDeploymentYamlContent() {
   ].join('\n') + '\n';
 }
 
-function getDockerfileContent(version) {
+function getDockerfileContent(version: string): string {
   const dirName = `thunder-${version}-linux-x64`;
   return `FROM alpine:3.19
 RUN apk add --no-cache sqlite openssl ca-certificates bash curl unzip lsof
@@ -64,7 +61,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 `;
 }
 
-function getEntrypointContent() {
+function getEntrypointContent(): string {
   return `#!/bin/bash
 set -e
 
@@ -167,18 +164,18 @@ exec bash start.sh
 `;
 }
 
-function isCLIAvailable(cliName) {
+function isCLIAvailable(cliName: string | undefined): boolean {
   if (!cliName) return true;
   const result = spawnSync(cliName, ['--version'], { stdio: 'pipe' });
   return !result.error && result.status === 0;
 }
 
-async function ensureCLI(recipe) {
+async function ensureCLI(recipe: Recipe): Promise<void> {
   if (!recipe.cliName || isCLIAvailable(recipe.cliName)) return;
 
   note(
-    `${colors.cyan(recipe.cliName)} is not installed.\n\nInstall command:\n  ${colors.bold(recipe.installCmd)}`,
-    `${recipe.displayName} — setup needed`
+    `${colors.cyan(recipe.cliName)} is not installed.\n\nInstall command:\n  ${colors.bold(recipe.installCmd!)}`,
+    `${recipe.displayName} — setup needed`,
   );
 
   const shouldInstall = await confirm({
@@ -194,35 +191,34 @@ async function ensureCLI(recipe) {
   const s = spinner();
   s.start(`Installing ${recipe.cliName}...`);
   try {
-    execSync(recipe.installCmd, { stdio: 'pipe' });
+    execSync(recipe.installCmd!, { stdio: 'pipe' });
     s.stop(`${recipe.cliName} installed`);
   } catch (err) {
-    s.stop(`Install failed: ${err.message}`);
-    note(`Run this manually, then re-run deploy:\n  ${colors.bold(recipe.installCmd)}`, 'Manual install needed');
+    s.stop(`Install failed: ${(err as Error).message}`);
+    note(`Run this manually, then re-run deploy:\n  ${colors.bold(recipe.installCmd!)}`, 'Manual install needed');
     process.exit(1);
   }
 
-  // Patch PATH for installers that drop binaries outside the default PATH
   if (recipe.postInstallPath) {
-    process.env.PATH = `${recipe.postInstallPath}${path.delimiter}${process.env.PATH}`;
+    process.env['PATH'] = `${recipe.postInstallPath}${path.delimiter}${process.env['PATH']}`;
   }
 
   if (!isCLIAvailable(recipe.cliName)) {
     note(
       `Installed but ${colors.cyan(recipe.cliName)} isn't on PATH yet.\n\nRestart your terminal, then run:\n  ${colors.bold('npx thunderid deploy')}`,
-      'Restart terminal needed'
+      'Restart terminal needed',
     );
     process.exit(0);
   }
 }
 
-async function deploy(_args) {
+export async function deploy(_args: string[]): Promise<void> {
   // eslint-disable-next-line no-console
   console.clear();
 
   intro(colors.bold('⚡ ThunderID') + colors.dim(' — Deploy'));
 
-  let version;
+  let version: string;
   const localState = readState();
   if (localState.lastUsedVersion) {
     version = localState.lastUsedVersion;
@@ -235,16 +231,15 @@ async function deploy(_args) {
       s.stop(`Thunder v${version}`);
     } catch (err) {
       s.stop('Could not fetch latest Thunder release.');
-      process.stderr.write(`\nError: ${err.message}\n`);
+      process.stderr.write(`\nError: ${(err as Error).message}\n`);
       process.exit(1);
     }
   }
 
   const recipes = loadRecipes();
 
-  // Check CLI availability for each recipe upfront
-  const availability = Object.fromEntries(
-    recipes.map((r) => [r.id, isCLIAvailable(r.cliName)])
+  const availability: Record<string, boolean> = Object.fromEntries(
+    recipes.map((r) => [r.id, isCLIAvailable(r.cliName)]),
   );
 
   const recipeId = await select({
@@ -276,15 +271,14 @@ async function deploy(_args) {
     process.exit(0);
   }
 
-  const recipe = recipes.find((r) => r.id === recipeId);
+  const recipe = recipes.find((r) => r.id === recipeId)!;
 
-  // Install CLI if missing, then check auth
   await ensureCLI(recipe);
 
   try {
     await recipe.preflight();
   } catch (err) {
-    process.stderr.write(`\n${colors.red('Preflight failed:')} ${err.message}\n`);
+    process.stderr.write(`\n${colors.red('Preflight failed:')} ${(err as Error).message}\n`);
     process.exit(1);
   }
 
@@ -301,20 +295,21 @@ async function deploy(_args) {
     process.exit(0);
   }
 
-  let dbUrl;
+  let dbUrl: string | undefined;
   if (dbType === 'postgres') {
-    dbUrl = await text({
+    const dbUrlInput = await text({
       message: 'DATABASE_URL:',
       placeholder: 'postgresql://user:pass@db.example.com/dbname',
       validate: (v) => (v ? undefined : 'DATABASE_URL is required'),
     });
-    if (isCancel(dbUrl)) {
+    if (isCancel(dbUrlInput)) {
       cancel('Deploy cancelled.');
       process.exit(0);
     }
+    dbUrl = dbUrlInput as string;
   }
 
-  let appName;
+  let appName: string | undefined;
   if (recipe.needsAppName !== false) {
     const defaultName = `thunder-${Math.random().toString(36).slice(2, 7)}`;
     const appNameInput = await text({
@@ -328,7 +323,7 @@ async function deploy(_args) {
       process.exit(0);
     }
 
-    appName = appNameInput || defaultName;
+    appName = (appNameInput as string) || defaultName;
   }
 
   const deployDir = path.join(process.cwd(), '.thunderdeploy');
@@ -340,16 +335,14 @@ async function deploy(_args) {
   if (fs.existsSync(dockerfilePath)) {
     note('Existing Dockerfile found — it will be overwritten.', 'Warning');
   }
-  fs.writeFileSync(dockerfilePath, getDockerfileContent(version), 'utf8');
+  fs.writeFileSync(dockerfilePath, getDockerfileContent(version!), 'utf8');
 
   try {
-    await recipe.deploy({ appName, dbType, dbUrl, thunderVersion: version });
+    await recipe.deploy({ appName, dbType: dbType as DbType, dbUrl, thunderVersion: version! });
   } catch (err) {
-    process.stderr.write(`\n${colors.red('Deploy failed:')} ${err.message}\n`);
+    process.stderr.write(`\n${colors.red('Deploy failed:')} ${(err as Error).message}\n`);
     process.exit(1);
   }
 
-  outro(colors.green(`ThunderID v${version} deployed${appName ? ` as ${colors.bold(appName)}` : ''}`));
+  outro(colors.green(`ThunderID v${version!} deployed${appName ? ` as ${colors.bold(appName)}` : ''}`));
 }
-
-module.exports = { deploy };

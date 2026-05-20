@@ -1,13 +1,17 @@
-'use strict';
+import { execSync, spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { log } from '@clack/prompts';
+import colors from 'picocolors';
+import type { Recipe, DeployOptions } from '../lib/types';
 
-const { execSync, spawnSync } = require('child_process');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { log } = require('@clack/prompts');
-const colors = require('picocolors');
+interface FlyTomlOptions {
+  appName: string;
+  dbType: string;
+}
 
-function getFlyToml({ appName, dbType }) {
+function getFlyToml({ appName, dbType }: FlyTomlOptions): string {
   const lines = [
     `app = "${appName}"`,
     `primary_region = "iad"`,
@@ -27,7 +31,7 @@ function getFlyToml({ appName, dbType }) {
   return lines.join('\n') + '\n';
 }
 
-const fly = {
+const fly: Recipe = {
   id: 'fly',
   displayName: 'Fly.io',
   description: 'Free tier, persistent volumes for SQLite, single command',
@@ -44,13 +48,13 @@ const fly = {
     }
   },
 
-  async deploy({ appName, dbType, dbUrl }) {
+  async deploy({ appName, dbType, dbUrl }: DeployOptions) {
     const cwd = process.cwd();
 
-    fs.writeFileSync(path.join(cwd, 'fly.toml'), getFlyToml({ appName, dbType }), 'utf8');
+    fs.writeFileSync(path.join(cwd, 'fly.toml'), getFlyToml({ appName: appName!, dbType }), 'utf8');
     log.success('Generated fly.toml');
 
-    log.info(`Creating Fly.io app: ${colors.cyan(appName)}`);
+    log.info(`Creating Fly.io app: ${colors.cyan(appName!)}`);
     execSync(`flyctl launch --name "${appName}" --no-deploy --copy-config --yes`, { stdio: 'inherit' });
 
     if (dbType === 'sqlite') {
@@ -70,4 +74,4 @@ const fly = {
   },
 };
 
-module.exports = fly;
+export default fly;
