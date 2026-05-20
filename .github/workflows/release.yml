@@ -61,7 +61,7 @@ jobs:
       - name: 📝 Calculate Next Version
         id: version
         run: |
-          CURRENT=$(node -p "require('./${{ steps.pkg.outputs.dir }}/package.json').version")
+          CURRENT=$(npm view "${{ steps.pkg.outputs.name }}" version 2>/dev/null || node -p "require('./${{ steps.pkg.outputs.dir }}/package.json').version")
           if [[ $CURRENT =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
             MAJOR="${BASH_REMATCH[1]}"
             MINOR="${BASH_REMATCH[2]}"
