@@ -1,6 +1,6 @@
 {
   "name": "thunderid",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "description": "High-performance open-source identity stack, engineered for developers — instantly via npx",
   "keywords": [
     "thunderid",
